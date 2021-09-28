@@ -1,0 +1,148 @@
+---
+title: "Untitled"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+
+yt <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-03-02/youtube.csv')
+```
+
+```{r}
+base_theme <- theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+  )
+
+base_filter <- function(dat, cutoff=.85){
+  dat %>% 
+    filter(view_count <= quantile(view_count, probs=cutoff, na.rm=T)) 
+}
+```
+
+Feature engineering
+```{r}
+yt %>%
+  base_filter(.8) %>% 
+  rowwise() %>% 
+  mutate(nInteractions = sum(like_count, dislike_count, favorite_count, comment_count)) %>% 
+  ggplot(aes(x=view_count, y=nInteractions))+
+  geom_point()
+```
+
+```{r}
+yt %>% 
+  filter(view_count <= quantile(view_count, probs=.85, na.rm=T)) %>% 
+  ggplot(aes(x=view_count))+
+  geom_histogram()+
+  scale_x_continuous(labels=scales::label_comma())
+  glimpse()
+```
+
+```{r}
+yt %>%
+  filter(view_count <= quantile(view_count, probs=.85, na.rm=T)) %>% 
+  ggplot(aes(x=view_count, y=like_count))+
+  geom_point()+
+  scale_x_continuous(labels=scales::label_comma())
+```
+
+# What combination of variables produced the maximum views?
+```{r}
+yt %>% 
+  filter(view_count <= quantile(view_count, probs=.85, na.rm=T)) %>% 
+  ggplot(aes(x=show_product_quickly, y=view_count))+
+  geom_violin()+
+  geom_jitter(width=.1)+
+  scale_y_continuous(labels=scales::label_comma())+
+  base_theme
+```
+
+## What companies have got better / worse?
+```{r}
+yt %>% 
+  filter(view_count <= quantile(view_count, probs=.85, na.rm=T)) %>% 
+  ggplot(aes(x=year, y=view_count, color=brand))+
+  geom_point()+
+  geom_line()+
+  base_theme
+```
+
+## Is running more than 1 commercial worth it?
+```{r}
+yt %>% 
+  base_filter(.8) %>% 
+  group_by(year, brand) %>%
+  #filter(n() >= 2) %>%
+  mutate(ncomms = n()) %>%
+  ggplot(aes(x=factor(ncomms), y=view_count))+
+  geom_violin()+
+  geom_jitter(width=.1)+
+  scale_y_continuous(labels=scales::label_comma())+
+  base_theme
+```
+Hmmmm
+
+## Do people like saying positive things or negative things?
+```{r}
+yt %>% 
+  mutate(ldr = like_count / dislike_count) %>% 
+  mutate(ldr = if_else(ldr == Inf, 150, ldr)) %>% 
+  filter(view_count <= quantile(view_count, probs=.85, na.rm=T)) %>% 
+  ggplot(aes(x=view_count, y=ldr))+
+  geom_point()+
+  base_theme
+```
+
+```{r}
+yt %>% 
+  base_filter(.8) %>% 
+  ggplot(aes(x=dislike_count, y=comment_count))+
+  geom_point()
+```
+
+# Do people like patriotic videos or funny videos?
+```{r}
+yt %>% 
+  group_by(funny, patriotic) %>% 
+  summarise(median(view_count, na.rm=T))
+```
+
+# Have commercials been getting more riskay?
+```{r}
+yt %>% 
+  group_by(year) %>% 
+  summarise(
+    prop = mean(use_sex, na.rm=T),
+    ndid = sum(use_sex, na.rm=T),
+    ntot = sum(n())
+  ) %>% 
+  mutate(lab = paste0(ndid, '/', ntot)) %>% 
+  ggplot(aes(x=year, y=prop))+
+  geom_point()+
+  geom_line()+
+  geom_text(aes(label=lab), 
+            nudge_y=.05,
+            alpha=.5 )+
+  geom_hline(aes(yintercept=0))+
+  scale_y_continuous(
+    labels=scales::percent,
+    limits=c(0, 1),
+    breaks=c(.5, 1)
+  )+
+  labs(
+    title='% of commercials using sex',
+    x='',
+    y='',
+    caption='Big upticks are usually followed by downward moves'
+  )+
+  base_theme+
+  theme(
+    panel.border = element_blank(),
+    axis.ticks = element_blank()
+  )
+```
+
